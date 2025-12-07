@@ -5,32 +5,26 @@ from langchain_qdrant import QdrantVectorStore
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_google_genai import GoogleGenerativeAIEmbeddings # <--- Google Provider
 
 load_dotenv()
 
 # --- Configuration ---
 QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 COLLECTION_NAME = "compliance_audit"
 
 def get_rag_chain():
-    # 1. Setup the Brain (LLM)
+    # 1. Setup the Brain (Llama-3 via Groq)
     llm = ChatGroq(
         temperature=0, 
         model_name="llama-3.3-70b-versatile"
     )
 
-    # 2. Setup the Memory (FastEmbed)
-    # This runs LOCALLY on Render but is super lightweight (No API calls needed)
-    if os.getenv("RENDER"):
-        print("☁️  Running on Render: Using FastEmbed (Lightweight Local)")
-        from langchain_community.embeddings import FastEmbedEmbeddings
-        # This matches the model we used for ingestion
-        embeddings = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    else:
-        print("💻 Running Locally: Using CPU Embeddings")
-        from langchain_huggingface import HuggingFaceEmbeddings
-        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    # 2. Setup the Memory (Google Gemini Embeddings)
+    # This is API-based, so it uses 0 RAM on Render and is very stable.
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
 
     # 3. Connect to Qdrant
     vector_store = QdrantVectorStore.from_existing_collection(
