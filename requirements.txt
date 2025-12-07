@@ -5,7 +5,6 @@ langchain-groq
 langchain-huggingface
 langchain-qdrant
 qdrant-client
-sentence-transformers
 fastapi
 uvicorn
 pypdf
