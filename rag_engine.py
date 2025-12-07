@@ -1,4 +1,6 @@
 import os
+import requests
+from typing import List
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_qdrant import QdrantVectorStore
@@ -14,6 +16,23 @@ QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN")
 COLLECTION_NAME = "compliance_audit"
 
+# --- CUSTOM CLASS: Removes dependency on huggingface_hub library ---
+class LightweightHFEmbeddings:
+    def __init__(self, api_key, model_url):
+        self.api_key = api_key
+        self.api_url = model_url
+        self.headers = {"Authorization": f"Bearer {api_key}"}
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        # This manually calls the API using standard Python 'requests'
+        payload = {"inputs": texts, "options": {"wait_for_model": True}}
+        response = requests.post(self.api_url, headers=self.headers, json=payload)
+        response.raise_for_status() # Crash if API fails
+        return response.json()
+
+    def embed_query(self, text: str) -> List[float]:
+        return self.embed_documents([text])[0]
+
 def get_rag_chain():
     # 1. Setup the Brain (LLM)
     llm = ChatGroq(
@@ -22,24 +41,18 @@ def get_rag_chain():
     )
 
     # 2. Setup the Memory (Smart Toggle)
-    # If we are on Render, use the API (Save RAM) with the NEW URL.
-    # If we are Local, use the CPU (Stable).
-    
     if os.getenv("RENDER"):
-        print("☁️  Running on Render: Using HuggingFace API (Router URL)")
-        from langchain_huggingface import HuggingFaceEndpointEmbeddings
-        
-        # FIXED: We explicitly point to the new 2025 Router URL
+        print("☁️  Running on Render: Using Lightweight API Wrapper")
+        # Direct URL for the model
         model_url = "https://router.huggingface.co/hf-inference/models/sentence-transformers/all-MiniLM-L6-v2"
         
-        embeddings = HuggingFaceEndpointEmbeddings(
-            model=model_url,
-            task="feature-extraction",
-            huggingfacehub_api_token=HF_TOKEN,
+        # Use our custom class instead of the buggy library
+        embeddings = LightweightHFEmbeddings(
+            api_key=HF_TOKEN,
+            model_url=model_url
         )
     else:
         print("💻 Running Locally: Using CPU Embeddings")
-        # We import this inside the 'else' so Render doesn't need to install it
         from langchain_huggingface import HuggingFaceEmbeddings
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
