@@ -25,15 +25,16 @@ class LightweightHFEmbeddings(Embeddings):
         self.headers = {"Authorization": f"Bearer {api_key}"}
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        # Simplified payload (No 'options' to avoid 400 errors)
+        # 1. Simple Payload (No options, prevents 400 Error)
         payload = {"inputs": texts}
         
+        # 2. Call the API
         response = requests.post(self.api_url, headers=self.headers, json=payload)
         
-        # ERROR HANDLING: Print the actual error message from Hugging Face
+        # 3. Error Handling
         if response.status_code != 200:
             print(f"❌ HF API Error: {response.status_code}")
-            print(f"❌ Details: {response.text}") # <--- This will show in Render logs
+            print(f"❌ Details: {response.text}")
             response.raise_for_status()
             
         return response.json()
@@ -51,8 +52,9 @@ def get_rag_chain():
     # 2. Setup the Memory (Smart Toggle)
     if os.getenv("RENDER"):
         print("☁️  Running on Render: Using Lightweight API Wrapper")
-        # Switch to the standard Model URL (More reliable than Router)
-        model_url = "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2"
+        
+        # FIXED: Use the Router URL (Fixes 410) with the Simple Class (Fixes 400)
+        model_url = "https://router.huggingface.co/hf-inference/models/sentence-transformers/all-MiniLM-L6-v2"
         
         embeddings = LightweightHFEmbeddings(
             api_key=HF_TOKEN,
