@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_qdrant import QdrantVectorStore
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.embeddings import Embeddings # <--- NEW IMPORT
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
@@ -16,18 +17,17 @@ QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN")
 COLLECTION_NAME = "compliance_audit"
 
-# --- CUSTOM CLASS: Removes dependency on huggingface_hub library ---
-class LightweightHFEmbeddings:
+# --- CUSTOM CLASS: Inherits from the official Base Class ---
+class LightweightHFEmbeddings(Embeddings): # <--- INHERITS FROM BASE CLASS
     def __init__(self, api_key, model_url):
         self.api_key = api_key
         self.api_url = model_url
         self.headers = {"Authorization": f"Bearer {api_key}"}
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        # This manually calls the API using standard Python 'requests'
         payload = {"inputs": texts, "options": {"wait_for_model": True}}
         response = requests.post(self.api_url, headers=self.headers, json=payload)
-        response.raise_for_status() # Crash if API fails
+        response.raise_for_status()
         return response.json()
 
     def embed_query(self, text: str) -> List[float]:
@@ -43,10 +43,8 @@ def get_rag_chain():
     # 2. Setup the Memory (Smart Toggle)
     if os.getenv("RENDER"):
         print("☁️  Running on Render: Using Lightweight API Wrapper")
-        # Direct URL for the model
         model_url = "https://router.huggingface.co/hf-inference/models/sentence-transformers/all-MiniLM-L6-v2"
         
-        # Use our custom class instead of the buggy library
         embeddings = LightweightHFEmbeddings(
             api_key=HF_TOKEN,
             model_url=model_url
