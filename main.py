@@ -1,35 +1,23 @@
 import os
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware  # <--- CRITICAL IMPORT
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from rag_engine import get_rag_chain
 
-# 1. Suppress those annoying tokenizer warnings
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-# 2. Initialize the App
-app = FastAPI(
-    title="AuditAI API",
-    description="A RAG system for auditing NIST compliance",
-    version="1.0",
-)
+app = FastAPI(title="AuditAI API")
 
-# --- 3. ADD CORS MIDDLEWARE (The Fix) ---
-# This tells the server: "It is okay to accept requests from localhost:3000"
+# CORS Setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Your local frontend
-        "https://audit-ai-frontend.vercel.app",  # Your future Vercel deployment
-    ],
+    allow_origins=["http://localhost:3000", "https://audit-ai-frontend.vercel.app"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods (POST, GET, OPTIONS, etc.)
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-# ----------------------------------------
 
 
-# 4. Define the Data Models
 class QueryRequest(BaseModel):
     query: str
 
@@ -44,28 +32,41 @@ class QueryResponse(BaseModel):
     sources: list[Source]
 
 
-# 5. Load the Brain (Runs once when server starts)
 print("🚀 Loading RAG Engine...")
 chain = get_rag_chain()
 print("✅ Engine Ready!")
 
 
-# 6. The Endpoint
 @app.post("/chat", response_model=QueryResponse)
 def chat_endpoint(request: QueryRequest):
+    # --- LOGIC CHANGE: THE GREETING TRAP ---
+    # If the user just says "hi", don't waste AI power searching for documents.
+    # Return an instant response with NO sources.
+    greetings = ["hi", "hello", "hey", "greetings", "good morning", "good evening"]
+    cleaned_query = request.query.strip().lower().replace("!", "").replace(".", "")
+
+    if cleaned_query in greetings:
+        return QueryResponse(
+            answer="Hello! I am your NIST Compliance Auditor. I can help you navigate security frameworks, risk management rules, and governance policies. What would you like to check?",
+            sources=[],  # Force empty sources
+        )
+    # ---------------------------------------
+
     try:
-        # Ask the RAG chain
         response = chain.invoke({"input": request.query})
 
-        # Format the sources cleanly
         sources_list = []
-        for doc in response["context"]:
-            sources_list.append(
-                Source(
-                    page=doc.metadata.get("page", 0),
-                    text=doc.page_content[:200] + "...",  # Preview only
+
+        # Only add sources if the AI actually found an answer (filtering out short "I don't know" responses)
+        # This keeps the UI clean if the AI just apologizes.
+        if "I cannot find this" not in response["answer"]:
+            for doc in response["context"]:
+                sources_list.append(
+                    Source(
+                        page=doc.metadata.get("page", 0),
+                        text=doc.page_content[:200] + "...",
+                    )
                 )
-            )
 
         return QueryResponse(answer=response["answer"], sources=sources_list)
 
