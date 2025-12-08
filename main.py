@@ -2,13 +2,13 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from rag_engine import get_rag_chain
+from rag_engine import process_query  # <--- Changed Import
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 app = FastAPI(title="AuditAI API")
 
-# CORS Setup
+# CORS (Keep your specific origins)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "https://audit-ai-frontend.vercel.app"],
@@ -32,34 +32,16 @@ class QueryResponse(BaseModel):
     sources: list[Source]
 
 
-print("🚀 Loading RAG Engine...")
-chain = get_rag_chain()
-print("✅ Engine Ready!")
-
-
 @app.post("/chat", response_model=QueryResponse)
 def chat_endpoint(request: QueryRequest):
-    # --- LOGIC CHANGE: THE GREETING TRAP ---
-    # If the user just says "hi", don't waste AI power searching for documents.
-    # Return an instant response with NO sources.
-    greetings = ["hi", "hello", "hey", "greetings", "good morning", "good evening"]
-    cleaned_query = request.query.strip().lower().replace("!", "").replace(".", "")
-
-    if cleaned_query in greetings:
-        return QueryResponse(
-            answer="Hello! I am your NIST Compliance Auditor. I can help you navigate security frameworks, risk management rules, and governance policies. What would you like to check?",
-            sources=[],  # Force empty sources
-        )
-    # ---------------------------------------
-
     try:
-        response = chain.invoke({"input": request.query})
+        # Use the new Smart Router function
+        response = process_query(request.query)
 
         sources_list = []
 
-        # Only add sources if the AI actually found an answer (filtering out short "I don't know" responses)
-        # This keeps the UI clean if the AI just apologizes.
-        if "I cannot find this" not in response["answer"]:
+        # Only process sources if they exist (The Router ensures 'chat' returns [])
+        if "context" in response:
             for doc in response["context"]:
                 sources_list.append(
                     Source(
