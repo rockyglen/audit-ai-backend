@@ -24,8 +24,8 @@ llm = ChatGroq(temperature=0, model_name="llama-3.3-70b-versatile")
 def route_query(query: str) -> Literal["chat", "search"]:
     router_prompt = (
         "You are a router. Classify the user's input. "
-        "If it is a greeting, pleasantry, or generic chatter (e.g., 'hi', 'hello', 'thanks'), return 'chat'. "
-        "If it asks for information, rules, definitions, or compliance data, return 'search'. "
+        "Return 'chat' for: greetings, pleasantries, small talk, OR questions about your identity (e.g., 'who are you?', 'what can you do?'). "
+        "Return 'search' for: questions seeking information, rules, definitions, or compliance data from the NIST framework. "
         "Return ONLY the word 'chat' or 'search'."
     )
     prompt = ChatPromptTemplate.from_messages(
