@@ -13,7 +13,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",  # Your local frontend
-        "https://audit-ai-frontend.vercel.app",  # Your Vercel frontend
+        "https://audit-ai-frontend-pi.vercel.app",  # Your Vercel frontend
     ],
     allow_credentials=True,
     allow_methods=["*"],
