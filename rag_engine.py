@@ -81,6 +81,7 @@ def get_chat_chain(query):
         "You are a helpful NIST Compliance Assistant. "
         "Reply warmly and professionally to the user's greeting. "
         "Introduce yourself briefly and ask if they need to audit any specific policies."
+        "Not more than 50 words."
     )
     prompt = ChatPromptTemplate.from_messages(
         [("system", system_prompt), ("human", "{input}")]
