@@ -1,21 +1,25 @@
 import os
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware  # <--- THE MISSING PIECE
 from pydantic import BaseModel
-from rag_engine import process_query  # <--- Changed Import
+from rag_engine import process_query
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 app = FastAPI(title="AuditAI API")
 
-# CORS (Keep your specific origins)
+# --- CORS MIDDLEWARE (Fixes the 405/Network Error) ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://audit-ai-frontend.vercel.app"],
+    allow_origins=[
+        "http://localhost:3000",  # Your local frontend
+        "https://audit-ai-frontend.vercel.app",  # Your Vercel frontend
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# -----------------------------------------------------
 
 
 class QueryRequest(BaseModel):
@@ -35,12 +39,12 @@ class QueryResponse(BaseModel):
 @app.post("/chat", response_model=QueryResponse)
 def chat_endpoint(request: QueryRequest):
     try:
-        # Use the new Smart Router function
+        # The 'process_query' function now handles the AI routing automatically
         response = process_query(request.query)
 
         sources_list = []
 
-        # Only process sources if they exist (The Router ensures 'chat' returns [])
+        # Router Logic: 'chat' intent returns empty context, so this loop will skip
         if "context" in response:
             for doc in response["context"]:
                 sources_list.append(
@@ -54,4 +58,4 @@ def chat_endpoint(request: QueryRequest):
 
     except Exception as e:
         print(f"Error: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        raise HTTPException(status_code=500, detail=str(e))
