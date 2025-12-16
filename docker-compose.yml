@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend:
+    # Build from the Dockerfile in the current directory
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    
+    # Map the container name for easier debugging
+    container_name: audit_ai_backend
+    
+    # Automatically restart if it crashes
+    restart: always
+    
+    # Map port 8000 on your laptop to port 8000 in the container
+    ports:
+      - "8000:8000"
+    
+    # Load environment variables from your local .env file
+    # Ensure your .env file is in the same folder as this file
+    env_file:
+      - .env
+    
+    # (Optional) Mount volume for live code updates during development
+    # Remove this line in actual production
+    volumes:
+      - .:/app
