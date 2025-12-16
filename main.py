@@ -68,6 +68,7 @@ async def run_agent_stream(query: str):
                     docs = data["output"].get("documents", [])
                     captured_sources = [
                         {
+                            "file": d.metadata.get("source_file", "Unknown Doc"),
                             "page": d.metadata.get("page", 0),
                             "text": d.page_content[:200] + "...",
                         }

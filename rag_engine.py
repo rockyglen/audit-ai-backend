@@ -141,23 +141,25 @@ def transform_query(state):
 
 
 async def generate(state: GraphState, config: RunnableConfig):
-    """
-    Node 4: GENERATE (The Speaker)
-    Generates the final answer using the valid context.
-    Now ASYNC to support streaming tokens!
-    """
     print("---GENERATE NODE---")
     question = state["question"]
     documents = state["documents"]
 
-    # Context Construction
-    context_text = "\n\n".join([doc.page_content for doc in documents])
+    # --- CHANGE 1: Format Context with Filenames ---
+    # We now format it as: "[Source: acme_policy.pdf] The content..."
+    context_text = "\n\n".join(
+        [
+            f"[Source: {doc.metadata.get('source_file', 'Unknown')}]\n{doc.page_content}"
+            for doc in documents
+        ]
+    )
 
-    # Final Answer Prompt
+    # Final Answer Prompt (Slightly tweaked to encourage citing sources)
     prompt = ChatPromptTemplate.from_template(
         "You are a strict Compliance Auditor AI. "
         "Answer the user's question using ONLY the context provided below. "
-        "Do not apologize. Do not say 'I cannot find this'. "
+        "When answering, refer to the specific document names (e.g., 'According to the NIST framework...' or 'The Acme Policy states...')."
+        "If the documents conflict, point out the difference."
         "If the context is empty, simply state that the specific information is missing from the database."
         "\n\nContext:\n{context}\n\n"
         "Question: {question}\n"
@@ -166,8 +168,6 @@ async def generate(state: GraphState, config: RunnableConfig):
 
     rag_chain = prompt | llm | StrOutputParser()
 
-    # CRITICAL CHANGE: Use 'await' and 'ainvoke'
-    # This releases the lock so tokens can stream to the user
     response = await rag_chain.ainvoke(
         {"context": context_text, "question": question}, config=config
     )
