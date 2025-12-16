@@ -10,6 +10,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_groq import ChatGroq
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
+from langchain_core.runnables import RunnableConfig
 
 # --- LangGraph Imports ---
 from langgraph.graph import StateGraph, END
@@ -139,10 +140,11 @@ def transform_query(state):
     return {"search_query": better_query, "retry_count": current_retries + 1}
 
 
-def generate(state):
+async def generate(state: GraphState, config: RunnableConfig):
     """
     Node 4: GENERATE (The Speaker)
     Generates the final answer using the valid context.
+    Now ASYNC to support streaming tokens!
     """
     print("---GENERATE NODE---")
     question = state["question"]
@@ -163,7 +165,12 @@ def generate(state):
     )
 
     rag_chain = prompt | llm | StrOutputParser()
-    response = rag_chain.invoke({"context": context_text, "question": question})
+
+    # CRITICAL CHANGE: Use 'await' and 'ainvoke'
+    # This releases the lock so tokens can stream to the user
+    response = await rag_chain.ainvoke(
+        {"context": context_text, "question": question}, config=config
+    )
 
     return {"generation": response}
 
