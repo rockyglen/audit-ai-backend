@@ -1,113 +1,148 @@
-import time
-import ast  # <--- NEW: Using AST instead of JSON for safer parsing
-from rag_engine import process_query, llm
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
+import requests
+import json
+import pandas as pd
+import os
+import re
+from dotenv import load_dotenv
 
-# --- 1. The Golden Dataset ---
-TEST_DATASET = [
+# Load Env for the Judge
+load_dotenv()
+from langchain_groq import ChatGroq
+
+# --- CONFIGURATION ---
+API_URL = "http://localhost:8000/chat"
+JUDGE_MODEL = "llama-3.3-70b-versatile"  # The latest stable model
+
+# --- THE TEST DATASET ---
+test_cases = [
     {
-        "question": "What are the 6 functions of the NIST Cybersecurity Framework 2.0?",
-        "expected_answer": "The 6 functions are Govern, Identify, Protect, Detect, Respond, and Recover.",
+        "type": "retrieval",
+        "question": "What are the 6 functions of NIST CSF 2.0?",
+        "expected_intent": "Must list: Govern, Identify, Protect, Detect, Respond, Recover.",
     },
     {
-        "question": "What is the purpose of the Govern function?",
-        "expected_answer": "The Govern function establishes and monitors the organization's cybersecurity risk management strategy, expectations, and policy.",
+        "type": "retrieval",
+        "question": "What is the definition of the Protect function?",
+        "expected_intent": "Must define it as safeguards to manage cybersecurity risk.",
     },
     {
-        "question": "Does the framework apply to small businesses?",
-        "expected_answer": "Yes, the framework is designed to be applicable to organizations of all sizes and sectors, including small businesses.",
+        "type": "router",
+        "question": "Who are you?",
+        "expected_intent": "Must identify as AuditAI or NIST Compliance Engine. MUST NOT cite sources.",
     },
     {
-        "question": "Hi, how are you?",
-        "expected_answer": "Greeting response (No sources).",
+        "type": "negative",
+        "question": "What is the recipe for chocolate cake?",
+        "expected_intent": "Must refuse to answer or state that information is missing/not in the database.",
     },
 ]
 
 
-# --- 2. The Judge (LLM Evaluation) ---
-def evaluate_answer(question, actual_answer, expected_answer, context):
-    eval_prompt = (
-        "You are a strict grader for a RAG system. \n"
-        "1. Compare the ACTUAL ANSWER with the EXPECTED ANSWER. \n"
-        "2. Check if the ACTUAL ANSWER is supported by the RETRIEVED CONTEXT. \n"
-        "3. Assign a score from 0 to 100. \n\n"
-        "QUESTION: {question}\n"
-        "EXPECTED ANSWER: {expected_answer}\n"
-        "ACTUAL ANSWER: {actual_answer}\n"
-        "RETRIEVED CONTEXT: {context}\n\n"
-        "Return ONLY a Python dictionary string like this: {{'score': 95, 'reason': 'Correctly identified all functions.'}}"
+def get_agent_response(question):
+    """Calls your Agentic Backend and reconstructs the streaming text."""
+    try:
+        response = requests.post(
+            API_URL, json={"query": question, "history": []}, stream=True
+        )
+
+        full_text = ""
+        sources = []
+
+        for line in response.iter_lines():
+            if line:
+                try:
+                    data = json.loads(line.decode("utf-8"))
+                    if data["type"] == "token":
+                        full_text += data["content"]
+                    elif data["type"] == "sources":
+                        sources = data["content"]
+                except:
+                    pass
+        return full_text, sources
+    except Exception as e:
+        return f"Error: {e}", []
+
+
+def evaluate_answer(question, actual_answer, expected_intent):
+    """Asks the Judge LLM to grade the response using strict JSON."""
+
+    # We ask for JSON to prevent parsing errors
+    judge_prompt = (
+        f"You are a strict QA Auditor grading an AI Bot.\n"
+        f"1. QUESTION: {question}\n"
+        f"2. ACTUAL ANSWER: {actual_answer}\n"
+        f"3. SUCCESS CRITERIA: {expected_intent}\n\n"
+        f"Task: Compare the ACTUAL ANSWER to the SUCCESS CRITERIA.\n"
+        f"Return a JSON object with two fields:\n"
+        f'- "score": "PASS" or "FAIL"\n'
+        f'- "reason": "Short explanation"\n\n'
+        f"JSON OUTPUT:"
     )
 
-    prompt = ChatPromptTemplate.from_messages([("human", eval_prompt)])
-    chain = prompt | llm | StrOutputParser()
-
+    llm = ChatGroq(
+        temperature=0, model_name=JUDGE_MODEL, api_key=os.getenv("GROQ_API_KEY")
+    )
     try:
-        result = chain.invoke(
-            {
-                "question": question,
-                "expected_answer": expected_answer,
-                "actual_answer": actual_answer,
-                "context": context,
-            }
-        )
-        return result
+        # Get raw response
+        result = llm.invoke(judge_prompt).content
+
+        # Extract JSON using Regex (in case the model adds extra text)
+        json_match = re.search(r"\{.*\}", result, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group(0))
+            return data["score"], data["reason"]
+        else:
+            return "UNKNOWN", "Could not parse JSON"
     except Exception as e:
-        return f"{{'score': 0, 'reason': 'Error during evaluation: {e}'}}"
+        return "ERROR", str(e)
 
 
-# --- 3. The Execution Loop ---
-def run_evaluation():
-    print("🧪 STARTING RAG EVALUATION...\n")
-    print(f"{'QUESTION':<50} | {'SCORE':<10} | {'REASON'}")
-    print("-" * 100)
+# --- MAIN LOOP ---
+results = []
 
-    total_score = 0
+print(f"🚀 Starting Auto-Eval on {len(test_cases)} cases...\n")
 
-    for test in TEST_DATASET:
-        rag_result = process_query(test["question"])
+for case in test_cases:
+    print(f"Testing: {case['question']}...", end=" ", flush=True)
 
-        context_text = ""
-        if "context" in rag_result:
-            for doc in rag_result["context"]:
-                context_text += doc.page_content[:200] + " ... \n"
+    # 1. Get Actual Answer
+    actual_text, citations = get_agent_response(case["question"])
 
-        eval_result = evaluate_answer(
-            test["question"],
-            rag_result["answer"],
-            test["expected_answer"],
-            context_text,
-        )
+    # 2. Judge It
+    score, reason = evaluate_answer(
+        case["question"], actual_text, case["expected_intent"]
+    )
 
-        try:
-            # ROBUST PARSING FIX:
-            # 1. Strip whitespace
-            clean_result = eval_result.strip()
-            # 2. Find the dictionary part (starts with { and ends with })
-            start = clean_result.find("{")
-            end = clean_result.rfind("}") + 1
-            clean_result = clean_result[start:end]
+    # 3. Special Check for "Router" tests (Must have 0 citations)
+    if case["type"] == "router" and score == "PASS":
+        if len(citations) > 0:
+            score = "FAIL"
+            reason = "Router Failed: It cited sources when it should have just chatted."
 
-            # 3. Use ast.literal_eval which handles single quotes perfectly
-            score_data = ast.literal_eval(clean_result)
+    # 4. Special Check for "Negative" tests (Must have 0 citations)
+    if case["type"] == "negative" and score == "PASS":
+        if len(citations) > 0:
+            score = "FAIL"
+            reason = "Hallucination Check Failed: It refused to answer but still cited fake sources."
 
-            score = score_data.get("score", 0)
-            reason = score_data.get("reason", "No reason provided")
+    # 5. Save Result
+    results.append(
+        {
+            "Type": case["type"],
+            "Question": case["question"],
+            "Answer Preview": actual_text[:50].replace("\n", " ") + "...",
+            "Citations": len(citations),
+            "Score": score,
+            "Reason": reason,
+        }
+    )
+    print(f"[{score}]")
 
-            # Truncate reason for cleaner table display
-            display_reason = (reason[:75] + "..") if len(reason) > 75 else reason
+# --- REPORT ---
+df = pd.DataFrame(results)
+print("\n--- 📊 EVALUATION REPORT ---")
+print(df.to_markdown(index=False))
 
-            print(f"{test['question'][:47]:<47}... | {score:<10} | {display_reason}")
-            total_score += score
-
-        except Exception as e:
-            print(f"{test['question'][:47]:<47}... | ERROR      | Parse Error: {e}")
-            print(f"Raw Output: {eval_result}\n")
-
-    avg_score = total_score / len(TEST_DATASET)
-    print("-" * 100)
-    print(f"\n📊 FINAL ACCURACY SCORE: {avg_score:.2f}/100")
-
-
-if __name__ == "__main__":
-    run_evaluation()
+# Calculate Accuracy
+pass_count = df[df["Score"] == "PASS"].shape[0]
+print(f"\nFinal Score: {pass_count}/{len(df)} ({pass_count/len(df)*100:.0f}%)")
