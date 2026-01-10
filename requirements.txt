@@ -12,3 +12,6 @@ langgraph
 qdrant-client
 pypdf
 langchain-text-splitters
+pandas
+datasets
+ragas

@@ -1,6 +1,7 @@
 import os
 from typing import List, Literal, TypedDict
 from dotenv import load_dotenv
+import asyncio
 
 # --- LangChain Imports ---
 from langchain_core.prompts import ChatPromptTemplate
@@ -11,6 +12,7 @@ from langchain_groq import ChatGroq
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from langchain_core.runnables import RunnableConfig
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 # --- LangGraph Imports ---
 from langgraph.graph import StateGraph, END
@@ -32,12 +34,12 @@ if not GROQ_API_KEY or not QDRANT_URL or not QDRANT_API_KEY or not GOOGLE_API_KE
 
 # Initialize Llama-3 (Groq)
 # We use temperature=0 for strict, reliable logic
-llm = ChatGroq(
-    temperature=0, model_name="llama-3.3-70b-versatile", api_key=GROQ_API_KEY
-)
+llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY)
 
 # Initialize Embeddings (Google Gemini 004)
-embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+embeddings = GoogleGenerativeAIEmbeddings(
+    model="models/text-embedding-004", google_api_key=GOOGLE_API_KEY
+)
 
 # Initialize Vector DB (Qdrant)
 client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
@@ -275,7 +277,7 @@ def process_query(user_query: str):
 
     # Invoke the graph
     try:
-        final_state = app.invoke(inputs)
+        final_state = asyncio.run(app.ainvoke(inputs))
         return {
             "answer": final_state["generation"],
             "context": final_state["documents"],
