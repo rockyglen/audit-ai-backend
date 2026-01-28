@@ -34,7 +34,9 @@ if not GROQ_API_KEY or not QDRANT_URL or not QDRANT_API_KEY or not GOOGLE_API_KE
 
 # Initialize Llama-3 (Groq)
 # We use temperature=0 for strict, reliable logic
-llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY)
+llm = ChatGoogleGenerativeAI(
+    model="gemini-3-flash-preview", google_api_key=GOOGLE_API_KEY
+)
 
 # Initialize Embeddings (Google Gemini 004)
 embeddings = GoogleGenerativeAIEmbeddings(
