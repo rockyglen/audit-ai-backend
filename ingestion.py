@@ -28,7 +28,7 @@ def ingest_docs():
 
     # CHANGED: Use Google Embeddings
     print(f"🧠 Initializing Google Gemini Embeddings...")
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-005")
 
     print("☁️  Connecting to Qdrant Cloud...")
 

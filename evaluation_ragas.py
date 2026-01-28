@@ -51,7 +51,7 @@ def run_evaluation():
 
     # 3. USE THE ADAPTED EMBEDDINGS (Fixes the AttributeError)
     evaluator_embeddings = RagasGoogleEmbeddings(
-        client=client, model="text-embedding-004"
+        client=client, model="text-embedding-005"
     )
 
     # 4. MANUAL BINDING
