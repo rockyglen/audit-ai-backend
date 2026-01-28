@@ -38,7 +38,7 @@ llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API
 
 # Initialize Embeddings (Google Gemini 004)
 embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/text-embedding-004", google_api_key=GOOGLE_API_KEY
+    model="models/text-embedding-005", google_api_key=GOOGLE_API_KEY
 )
 
 # Initialize Vector DB (Qdrant)
