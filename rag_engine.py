@@ -9,10 +9,10 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_groq import ChatGroq
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from langchain_core.runnables import RunnableConfig
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 # --- LangGraph Imports ---
 from langgraph.graph import StateGraph, END
@@ -29,13 +29,15 @@ QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-if not GROQ_API_KEY or not QDRANT_URL or not QDRANT_API_KEY or not GOOGLE_API_KEY:
+if not QDRANT_URL or not QDRANT_API_KEY or not GOOGLE_API_KEY or not GROQ_API_KEY:
     raise ValueError("Missing API Keys in .env file")
 
-# Initialize Llama-3 (Groq)
+# Initialize Llama 3 (Groq)
 # We use temperature=0 for strict, reliable logic
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3-flash-preview", google_api_key=GOOGLE_API_KEY
+llm = ChatGroq(
+    model="llama-3.3-70b-versatile",
+    temperature=0,
+    groq_api_key=GROQ_API_KEY,
 )
 
 # Initialize Embeddings (Google Gemini 004)
@@ -85,7 +87,7 @@ def retrieve(state):
     query = state.get("search_query") or state["question"]
 
     # Retrieve top 3 documents
-    documents = vector_store.similarity_search(query, k=3)
+    documents = vector_store.similarity_search(query, k=10)
     return {"documents": documents, "question": state["question"]}
 
 
@@ -107,7 +109,7 @@ def grade_documents(state):
         "Return ONLY the word 'yes' or 'no'."
     )
 
-    chain = prompt | llm | StrOutputParser()
+    chain = prompt | llm.with_config({"tags": ["grader"]}) | StrOutputParser()
 
     # Logic: If at least ONE document is relevant, we proceed.
     # Otherwise, we assume retrieval failed.
@@ -170,7 +172,7 @@ async def generate(state: GraphState, config: RunnableConfig):
         "Answer:"
     )
 
-    rag_chain = prompt | llm | StrOutputParser()
+    rag_chain = prompt | llm.with_config({"tags": ["generator"]}) | StrOutputParser()
 
     response = await rag_chain.ainvoke(
         {"context": context_text, "question": question}, config=config

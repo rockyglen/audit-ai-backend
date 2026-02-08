@@ -79,6 +79,10 @@ async def run_agent_stream(query: str):
 
             # B. Capture Tokens
             if "chunk" in data:
+                # Only capture tokens from the 'generator' tag to avoid leaking grader logic ("yes"/"no")
+                if "generator" not in event.get("tags", []):
+                    continue
+
                 chunk = data["chunk"]
                 content = ""
                 if hasattr(chunk, "content"):
@@ -140,6 +144,8 @@ if __name__ == "__main__":
 
     if not os.getenv("GROQ_API_KEY"):
         print("❌ Error: GROQ_API_KEY is missing!")
+    if not os.getenv("GOOGLE_API_KEY"):
+        print("❌ Error: GOOGLE_API_KEY is missing!")
     else:
         print("🚀 Starting AuditAI Agent...")
         uvicorn.run(app, host="0.0.0.0", port=8000)
