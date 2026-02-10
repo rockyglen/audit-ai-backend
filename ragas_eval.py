@@ -3,11 +3,12 @@ import json
 import pandas as pd
 from datasets import Dataset
 from ragas import evaluate
+from ragas.run_config import RunConfig
 from ragas.metrics import (
-    faithfulness,
-    answer_relevancy,
-    context_precision,
-    context_recall,
+    Faithfulness,
+    AnswerRelevancy,
+    ContextPrecision,
+    ContextRecall,
 )
 from langchain_groq import ChatGroq
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -91,10 +92,10 @@ def run_ragas_eval():
     results = evaluate(
         dataset=dataset,
         metrics=[
-            faithfulness,
-            answer_relevancy,
-            context_precision,
-            context_recall,
+            Faithfulness(),
+            AnswerRelevancy(),
+            ContextPrecision(),
+            ContextRecall(),
         ],
         llm=judge_llm,
         embeddings=embeddings,
