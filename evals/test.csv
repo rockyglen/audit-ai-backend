@@ -1,0 +1,11 @@
+question,ground_truth
+"What are the 6 functions of the NIST CSF 2.0?","The 6 functions are Govern, Identify, Protect, Detect, Respond, and Recover."
+"What is the purpose of the Govern function?","The Govern function establishes and monitors the organization's cybersecurity risk management strategy, expectations, and policy."
+"Define the Detect function.","The Detect function defines the appropriate activities to identify the occurrence of a cybersecurity event."
+"What does the Respond function entail?","The Respond function includes activities to take action regarding a detected cybersecurity incident."
+"Explain the Recover function.","The Recover function identifies appropriate activities to maintain plans for resilience and to restore any capabilities or services that were impaired due to a cybersecurity incident."
+"What is a Framework Profile?","A Framework Profile represents the outcomes based on business needs that an organization has selected from the Framework Categories and Subcategories."
+"What are Framework Tiers?","Framework Tiers provide context on how an organization views cybersecurity risk and the processes in place to manage that risk."
+"What is the Identify function?","The Identify function helps determine the cybersecurity risk to systems, people, assets, data, and capabilities."
+"What is the Protect function?","The Protect function outlines safeguards to ensure delivery of critical infrastructure services and limit the impact of a potential cybersecurity event."
+"Who is the intended audience for the NIST Framework?","The Framework is designed to be used by organizations of all sizes and sectors to manage cybersecurity risk."
