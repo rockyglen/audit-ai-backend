@@ -1,129 +1,114 @@
-# 🤖 AuditAI Backend
+# 🤖 AuditAI: Autonomous Agentic RAG for NIST Compliance
 
 [![Live Demo](https://img.shields.io/badge/Demo-Live-green?style=for-the-badge)](https://audit-ai-frontend-pi.vercel.app)
 
-The core intelligence engine for **AuditAI**—an autonomous **Agentic RAG** system designed to audit internal policies against the **NIST Cybersecurity Framework (CSF 2.0)**.
+AuditAI is a production-grade **Agentic RAG** system designed to audit internal organizational policies against the **NIST Cybersecurity Framework (CSF 2.0)**. 
 
-This FastAPI application orchestrates a complex graph workflow using **LangGraph** to route queries, retrieve semantic contexts via **Qdrant**, and generate hallucination-free responses with page-level citations using **Llama-3.3 (via Groq)**.
+Unlike standard RAG pipelines, AuditAI utilizes a **Self-Correcting Graph Architecture** to ensure 100% faithfulness, strictly enforced reasoning, and dynamic retrieval optimization.
 
 ---
 
-## 🏛️ Architecture
+## 🏗️ Advanced Architecture: The "Agentic" Core
 
-AuditAI uses a directed acyclic graph (DAG) to ensure high-quality retrieval and generation:
+AuditAI is powered by a directed acyclic graph (DAG) orchestrated via **LangGraph**. This allows the system to move beyond "one-shot" retrieval into a multi-step reasoning process.
+
+### 1. The Self-Correction Loop
+The system implements a **CRAG (Corrective RAG)** pattern to handle low-quality retrieval:
 
 ```mermaid
 graph TD
     A[User Query] --> B{Semantic Router}
-    B -- Greeting/ID --> C[Direct Chat Response]
+    B -- Small Talk/ID --> C[Direct Response]
     B -- Compliance Query --> D[Retrieve from Qdrant]
-    D --> E[Grade Documents]
-    E -- Relevant --> F[Generate Answer with Citations]
-    E -- Irrelevant --> G[Transform Query]
-    G --> D
-    F --> H[Stream Output via SSE]
+    D --> E[Document Grader]
+    E -- Relevant Docs Found --> F[RAG Generation]
+    E -- No Relevant Docs --> G[Query Transformer]
+    G -- Rewritten Query --> D
+    F --> H[Citations & Streaming]
     C --> H
 ```
 
-## ⚡ Key Capabilities
+*   **Semantic Router**: A fast-path LLM classifier that identifies intent. It bypasses the heavy graph for greetings or identity questions, reducing latency and cost.
+*   **Document Grader**: Evaluates retrieved chunks for semantic relevance to the query. 
+*   **Query Transformer**: If the grader lacks sufficient context, this node re-phrases the user's question into a more optimized search query for vector retrieval, triggering a loop-back.
 
-*   **Agentic Workflow:** Intelligently routes intent and self-corrects retrieval failures via query transformation loops.
-*   **Semantic Retrieval:** Uses Google Gemini `text-embedding-004` to index and search NIST PDF document chunks.
-*   **Zero Hallucinations:** Strictly enforces page-level citations; dynamically suppresses sources if the model determines the context is insufficient.
-*   **Real-time Streaming:** Asynchronous token streaming via Server-Sent Events (SSE) for a snappy UI experience.
-*   **Compliance Optimized:** Specifically tuned for the NIST Cybersecurity Framework (CSF 2.0).
+### 2. Hallucination Control & Citations
+AuditAI implements a "Strict Evidence" policy:
+*   **Page-Level Citations**: Every claim is mapped back to specific PDF page numbers and document names.
+*   **Refusal-Aware Suppression**: If the model determines (based on cross-referencing) that the answer is missing from the database, the backend **dynamically suppresses** citation cards to prevent misleading the user with irrelevant "sources".
 
-## 🛠️ Tech Stack
+---
 
-*   **Language:** Python 3.12+
-*   **API:** FastAPI & Uvicorn
-*   **Orchestration:** LangGraph & LangChain
-*   **LLM:** Llama-3.3 70B (via Groq)
-*   **Embeddings:** Google Gemini (text-embedding-004)
-*   **Vector DB:** Qdrant Cloud
-*   **Package Manager:** [uv](https://github.com/astral-sh/uv)
+## 🧠 AI Engineering Stack
+
+| Component | Technology | Rationale |
+| :--- | :--- | :--- |
+| **Orchestration** | LangGraph | Complex state management and cyclic loops (Self-Correction). |
+| **LLM** | Llama-3.3 70B (Groq) | Ultra-low latency inference with high reasoning capabilities. |
+| **Embeddings** | Google Gemini `text-embedding-004` | State-of-the-art semantic density for technical compliance text. |
+| **Vector DB** | Qdrant Cloud | High-performance vector search with metadata filtering support. |
+| **Performance** | FastAPI (Async) | Supports Server-Sent Events (SSE) for real-time token streaming. |
+
+---
+
+## 📊 Evaluation Framework (RAGAS)
+
+To ensure production stability, the system is evaluated using the **RAGAS** (RAG Assessment Series) framework.
+
+### Key Metrics Tracked:
+1.  **Faithfulness**: Measures if the answer is derived strictly from the retrieved context (Zero Hallucination).
+2.  **Answer Relevancy**: Assesses how well the response addresses the user's intent.
+3.  **Context Precision**: Evaluates the signal-to-noise ratio in retrieved chunks.
+4.  **Context Recall**: Checks if all necessary information to answer the question was actually retrieved.
+
+### Engineering Challenge: Custom LLM Wrappers
+The evaluation suite includes a **Custom Groq Wrapper** to handle API limitations (like the `n=1` constraint), allowing RAGAS to run "LLM-as-a-judge" simulations reliably on top of Groq's high-speed infrastructure.
+
+---
+
+## 📂 Modular Project Structure
+
+```text
+audit-ai-backend/
+├── src/audit_ai/
+│   ├── api/            # FastAPI entry points & SSE streaming logic
+│   ├── core/           # LangGraph state machine & RAG nodes
+│   └── data/           # PDF processing & vector ingestion pipeline
+├── scripts/            # Data collection & utility wrappers
+├── evals/              # RAGAS evaluation suite & test datasets
+├── data/               # Raw NIST PDF documents
+└── Dockerfile          # Multi-stage production build
+```
 
 ---
 
 ## 🚀 Getting Started
 
-### Prerequisites
-
-- Python 3.12+
-- [uv](https://github.com/astral-sh/uv) installed
-- API Keys for: Groq, Google AI (Gemini), and Qdrant Cloud
-
-### Local Setup
-
-1.  **Clone the repository:**
+### Installation
+1.  **Install dependencies** using [uv](https://github.com/astral-sh/uv):
     ```bash
-    git clone <repository-url>
-    cd audit-ai-backend
+    uv sync
     ```
-
-2.  **Environment Variables:**
-    Copy the example environment file and fill in your keys:
+2.  **Setup Environment**:
     ```bash
     cp .env.example .env
     ```
 
-3.  **Install Dependencies:**
-    ```bash
-    uv sync
-    ```
-
-4.  **Run the Backend:**
+### Execution
+*   **Run Backend**: 
     ```bash
     export PYTHONPATH=$PYTHONPATH:$(pwd)/src
     uv run python src/audit_ai/api/main.py
     ```
-    The API will be available at `http://localhost:8000`.
-
-### 📊 Data Ingestion
-
-To populate your Qdrant collection with the NIST framework:
-
-1.  Place your PDF in `data/nist_framework.pdf`.
-2.  Run the ingestion script:
+*   **Run Evaluator**:
     ```bash
     export PYTHONPATH=$PYTHONPATH:$(pwd)/src
-    uv run python src/audit_ai/data/ingestion.py
+    uv run python evals/ragas_eval.py
     ```
 
 ---
 
-## 🐳 Docker Deployment
+## 🛠️ Deployment
 
-### Using Docker Compose
-```bash
-docker-compose up --build
-```
-
-### Manual Docker Build
-```bash
-docker build -t audit-ai-backend .
-docker run -p 8000:8000 --env-file .env audit-ai-backend
-```
-
----
-
-## 🔗 API Documentation
-
-Once running, access the interactive documentation:
-- **Swagger UI:** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **ReDoc:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
-
-### Key Endpoints
-- `POST /chat`: Main streaming endpoint for compliance queries.
-- `GET /health`: System health check.
-
----
-
-## 📈 Evaluation
-
-AuditAI includes a specialized evaluation suite using **Ragas** to measure Faithfulness, Answer Relevance, and Context Precision.
-
-```bash
-export PYTHONPATH=$PYTHONPATH:$(pwd)/src
-uv run python evals/ragas_eval.py
-```
+- **Containerization**: Optimized with multi-stage Docker builds.
+- **CI/CD**: Configured for Render/Vercel with automatic health checks.
