@@ -3,7 +3,7 @@ import csv
 import json
 import time
 import pandas as pd
-from rag_engine import process_query
+from audit_ai.core.rag_engine import process_query
 from dotenv import load_dotenv
 
 load_dotenv()

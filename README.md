@@ -1,5 +1,7 @@
 # 🤖 AuditAI Backend
 
+[![Live Demo](https://img.shields.io/badge/Demo-Live-green?style=for-the-badge)](https://audit-ai-frontend-pi.vercel.app)
+
 The core intelligence engine for **AuditAI**—an autonomous **Agentic RAG** system designed to audit internal policies against the **NIST Cybersecurity Framework (CSF 2.0)**.
 
 This FastAPI application orchestrates a complex graph workflow using **LangGraph** to route queries, retrieve semantic contexts via **Qdrant**, and generate hallucination-free responses with page-level citations using **Llama-3.3 (via Groq)**.
@@ -72,7 +74,8 @@ graph TD
 
 4.  **Run the Backend:**
     ```bash
-    uv run main.py
+    export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+    uv run python src/audit_ai/api/main.py
     ```
     The API will be available at `http://localhost:8000`.
 
@@ -83,7 +86,8 @@ To populate your Qdrant collection with the NIST framework:
 1.  Place your PDF in `data/nist_framework.pdf`.
 2.  Run the ingestion script:
     ```bash
-    uv run ingestion.py
+    export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+    uv run python src/audit_ai/data/ingestion.py
     ```
 
 ---
@@ -120,5 +124,6 @@ Once running, access the interactive documentation:
 AuditAI includes a specialized evaluation suite using **Ragas** to measure Faithfulness, Answer Relevance, and Context Precision.
 
 ```bash
-uv run ragas_eval.py
+export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+uv run python evals/ragas_eval.py
 ```

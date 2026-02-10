@@ -46,4 +46,5 @@ USER appuser
 EXPOSE 8000
 
 # Command to run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENV PYTHONPATH="/app/src:${PYTHONPATH}"
+CMD ["uvicorn", "audit_ai.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -19,6 +19,8 @@ services:
     
     # Load environment variables from your local .env file
     # Ensure your .env file is in the same folder as this file
+    environment:
+      - PYTHONPATH=/app/src
     env_file:
       - .env
     
