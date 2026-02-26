@@ -15,6 +15,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGener
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from langchain_core.runnables import RunnableConfig
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 
 # --- LangGraph Imports ---
 from langgraph.graph import StateGraph, END
@@ -29,6 +30,7 @@ class GraphState(TypedDict):
     """
     question: str              # The user's original input
     search_query: str          # The query used for retrieval (can be rewritten)
+    chat_history: List[BaseMessage] # Memory of the conversation
     generation: str            # The final answer
     documents: List[Document]  # The retrieved context chunks
     grade: str                 # 'yes' or 'no' (Relevance check)
@@ -110,16 +112,20 @@ def transform_query(state: GraphState):
     """
     print("---TRANSFORM QUERY NODE---")
     question = state["question"]
+    chat_history = state.get("chat_history", [])
 
     prompt = ChatPromptTemplate.from_template(
-        "You are generating a specialized vector search query from a user question. \n"
-        "The previous search for the question '{question}' failed to yield relevant results. \n"
-        "Please re-phrase the question to focus on key technical terms for the NIST Cybersecurity Framework. \n"
-        "Return ONLY the new query text."
+        "You are an expert at re-writing search queries for vector databases. \n"
+        "Given the conversation history and the latest user question, generate a standalone search query "
+        "that captures the core technical need. Eliminate any conversational filler. \n\n"
+        "Chat History: {history} \n"
+        "New Question: {question} \n"
+        "Standalone Query:"
     )
 
+    history_str = "\n".join([f"{m.type}: {m.content}" for m in chat_history[-5:]])
     chain = prompt | llm | StrOutputParser()
-    better_query = chain.invoke({"question": question})
+    better_query = chain.invoke({"question": question, "history": history_str})
     current_retries = state.get("retry_count", 0)
     print(f"---REWRITTEN QUERY: {better_query}---")
     return {"search_query": better_query, "retry_count": current_retries + 1}
@@ -133,6 +139,7 @@ async def generate(state: GraphState, config: RunnableConfig):
     print("---GENERATE NODE---")
     question = state["question"]
     documents = state["documents"]
+    chat_history = state.get("chat_history", [])
 
     context_text = "\n\n".join(
         [
@@ -142,20 +149,22 @@ async def generate(state: GraphState, config: RunnableConfig):
     )
 
     prompt = ChatPromptTemplate.from_template(
-        "You are a strict Compliance Auditor AI. "
-        "Answer the user's question using ONLY the context provided below. "
-        "When answering, refer to the specific document names (e.g., 'According to the NIST framework...' or 'The Acme Policy states...')."
-        "If the documents conflict, point out the difference."
-        "If the context is empty, simply state that the specific information is missing from the database."
-        "\n\nContext:\n{context}\n\n"
-        "Question: {question}\n"
+        "You are AuditAI, a strict Compliance Auditor for NIST CSF 2.0. \n"
+        "Answer the user's question using the context and chat history provided. \n"
+        "Refer to specific documents when possible. \n"
+        "If the answer isn't in the context, be honest and state it is missing from the database.\n\n"
+        "Chat History: {history} \n"
+        "Context: {context} \n"
+        "Question: {question} \n"
         "Answer:"
     )
 
+    history_str = "\n".join([f"{m.type}: {m.content}" for m in chat_history[-5:]])
     rag_chain = prompt | llm.with_config({"tags": ["generator"]}) | StrOutputParser()
 
     response = await rag_chain.ainvoke(
-        {"context": context_text, "question": question}, config=config
+        {"context": context_text, "question": question, "history": history_str}, 
+        config=config
     )
 
     return {"generation": response}
@@ -226,30 +235,34 @@ def route_query(user_query: str) -> Literal["chat", "search"]:
     return "search"
 
 
-def run_chat_logic(user_query: str):
+def run_chat_logic(user_query: str, history: List[BaseMessage] = []):
     """
-    Handles simple conversational queries without the full graph.
+    Handles simple conversational queries with history but without the full graph.
     """
     prompt = ChatPromptTemplate.from_template(
-        "You are AuditAI, an autonomous compliance auditor for the NIST Cybersecurity Framework - 2.0"
-        "Answer this basic conversational query naturally: {query}"
+        "You are AuditAI, an autonomous compliance auditor for the NIST Cybersecurity Framework - 2.0. \n"
+        "Use the chat history for context if needed. \n\n"
+        "Chat History: {history} \n"
+        "User Question: {query} \n"
+        "Answer:"
     )
     
+    history_str = "\n".join([f"{m.type}: {m.content}" for m in history[-5:]])
     chain = prompt | llm | StrOutputParser()
-    answer = chain.invoke({"query": user_query})
+    answer = chain.invoke({"query": user_query, "history": history_str})
     return {"answer": answer}
 
 
-def process_query(user_query: str):
+def process_query(user_query: str, history: List[BaseMessage] = []):
     """
     Helper function for non-streaming execution (e.g., for evals).
     """
     intent = route_query(user_query)
     
     if intent == "chat":
-        return run_chat_logic(user_query)
+        return run_chat_logic(user_query, history)
         
-    inputs = {"question": user_query}
+    inputs = {"question": user_query, "chat_history": history}
     try:
         final_state = asyncio.run(app.ainvoke(inputs))
         return {
