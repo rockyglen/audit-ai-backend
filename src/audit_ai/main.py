@@ -10,7 +10,6 @@ from pydantic import BaseModel
 
 # Import the graph AND the router logic
 from audit_ai.engine import app as audit_graph, route_query, run_chat_logic
-from langchain_core.messages import HumanMessage, AIMessage
 
 app = FastAPI(
     title="AuditAI Agent API",
@@ -32,23 +31,16 @@ class ChatRequest(BaseModel):
     history: Optional[List[Dict[str, str]]] = []
 
 
-async def run_agent_stream(query: str, history: List[Dict[str, str]] = []):
+async def run_agent_stream(query: str):
     """
-    Robust Generator: Streams text, handles history, and conditionally filters sources.
+    Robust Generator: Streams text and conditionally filters sources if the AI doesn't know the answer.
     """
-    # --- 0. CONVERT HISTORY ---
-    chat_history = []
-    for m in history:
-        if m.get("role") == "user":
-            chat_history.append(HumanMessage(content=m["content"]))
-        else:
-            chat_history.append(AIMessage(content=m["content"]))
 
     # --- 1. ROUTER (Fast Path) ---
     intent = route_query(query)
 
     if intent == "chat":
-        response = run_chat_logic(query, chat_history)
+        response = run_chat_logic(query)
         answer_text = response["answer"]
         tokens = answer_text.split(" ")
         for token in tokens:
@@ -67,7 +59,7 @@ async def run_agent_stream(query: str, history: List[Dict[str, str]] = []):
     try:
         # Stream events from the graph
         async for event in audit_graph.astream_events(
-            {"question": query, "chat_history": chat_history}, version="v1"
+            {"question": query}, version="v1"
         ):
             kind = event["event"]
             data = event.get("data", {})
@@ -138,8 +130,7 @@ async def run_agent_stream(query: str, history: List[Dict[str, str]] = []):
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     return StreamingResponse(
-        run_agent_stream(request.query, request.history), 
-        media_type="application/x-ndjson"
+        run_agent_stream(request.query), media_type="application/x-ndjson"
     )
 
 
