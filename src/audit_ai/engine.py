@@ -231,7 +231,7 @@ def run_chat_logic(user_query: str):
     Handles simple conversational queries without the full graph.
     """
     prompt = ChatPromptTemplate.from_template(
-        "You are AuditAI, an autonomous compliance auditor."
+        "You are AuditAI, an autonomous compliance auditor for the NIST Cybersecurity Framework - 2.0"
         "Answer this basic conversational query naturally: {query}"
     )
     
