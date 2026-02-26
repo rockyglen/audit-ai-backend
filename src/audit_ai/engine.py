@@ -1,14 +1,16 @@
 import os
-from typing import List, Literal, TypedDict
-from dotenv import load_dotenv
 import asyncio
+from typing import List, Literal, TypedDict
 
-# --- LangChain Imports ---
+from audit_ai.config import (
+    GROQ_API_KEY, GOOGLE_API_KEY, QDRANT_URL, QDRANT_API_KEY, 
+    LLM_MODEL, EMBEDDING_MODEL, COLLECTION_NAME
+)
+
+# --- LangChain & Qdrant Imports ---
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_groq import ChatGroq
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
@@ -17,81 +19,61 @@ from langchain_core.runnables import RunnableConfig
 # --- LangGraph Imports ---
 from langgraph.graph import StateGraph, END
 
-# Load environment variables
-load_dotenv()
-
 # =============================================================================
-# 1. INITIALIZATION & SETUP
+# 1. STATE DEFINITION
 # =============================================================================
-
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-QDRANT_URL = os.getenv("QDRANT_URL")
-QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-
-if not QDRANT_URL or not QDRANT_API_KEY or not GOOGLE_API_KEY or not GROQ_API_KEY:
-    raise ValueError("Missing API Keys in .env file")
-
-# Initialize Llama 3 (Groq)
-# We use temperature=0 for strict, reliable logic
-llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    temperature=0,
-    groq_api_key=GROQ_API_KEY,
-)
-
-# Initialize Embeddings (Google Gemini 004)
-embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/gemini-embedding-001", google_api_key=GOOGLE_API_KEY
-)
-
-# Initialize Vector DB (Qdrant)
-client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
-
-vector_store = QdrantVectorStore(
-    client=client,
-    collection_name="compliance_audit",
-    embedding=embeddings,
-)
-
-# =============================================================================
-# 2. DEFINE THE GRAPH STATE
-# =============================================================================
-
 
 class GraphState(TypedDict):
     """
     Represents the state of our graph (the "Backpack").
     """
-
-    question: str  # The user's original input
-    search_query: str  # The query used for retrieval (can be rewritten)
-    generation: str  # The final answer
+    question: str              # The user's original input
+    search_query: str          # The query used for retrieval (can be rewritten)
+    generation: str            # The final answer
     documents: List[Document]  # The retrieved context chunks
-    grade: str  # 'yes' or 'no' (Relevance check)
-    retry_count: int
-
+    grade: str                 # 'yes' or 'no' (Relevance check)
+    retry_count: int           # Tracks retries
 
 # =============================================================================
-# 3. DEFINE THE NODES (AGENTS)
+# 2. INITIALIZATION
 # =============================================================================
 
+# Initialize Components using Centralized Config
+llm = ChatGoogleGenerativeAI(
+    model=LLM_MODEL,
+    temperature=0,
+    google_api_key=GOOGLE_API_KEY,
+)
 
-def retrieve(state):
+embeddings = GoogleGenerativeAIEmbeddings(
+    model=EMBEDDING_MODEL, 
+    google_api_key=GOOGLE_API_KEY
+)
+
+client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+
+vector_store = QdrantVectorStore(
+    client=client,
+    collection_name=COLLECTION_NAME,
+    embedding=embeddings,
+)
+
+# =============================================================================
+# 2. DEFINE THE NODES (AGENTS)
+# =============================================================================
+
+def retrieve(state: GraphState):
     """
     Node 1: RETRIEVE
     Queries Qdrant using either the 'search_query' (if rewritten) or original 'question'.
     """
     print("---RETRIEVE NODE---")
-    # If a rewritten query exists, use it. Otherwise, use the original.
     query = state.get("search_query") or state["question"]
-
-    # Retrieve top 3 documents
     documents = vector_store.similarity_search(query, k=10)
     return {"documents": documents, "question": state["question"]}
 
 
-def grade_documents(state):
+def grade_documents(state: GraphState):
     """
     Node 2: GRADE DOCUMENTS (The Critic)
     Checks if retrieved documents are relevant.
@@ -100,7 +82,6 @@ def grade_documents(state):
     question = state["question"]
     documents = state["documents"]
 
-    # Simple Grader Prompt
     prompt = ChatPromptTemplate.from_template(
         "You are a grader assessing relevance of a retrieved document to a user question. \n"
         "Here is the retrieved document: \n\n {context} \n\n"
@@ -111,8 +92,6 @@ def grade_documents(state):
 
     chain = prompt | llm.with_config({"tags": ["grader"]}) | StrOutputParser()
 
-    # Logic: If at least ONE document is relevant, we proceed.
-    # Otherwise, we assume retrieval failed.
     score = "no"
     for doc in documents:
         grade = chain.invoke({"question": question, "context": doc.page_content})
@@ -124,7 +103,7 @@ def grade_documents(state):
     return {"grade": score}
 
 
-def transform_query(state):
+def transform_query(state: GraphState):
     """
     Node 3: TRANSFORM QUERY (The Fixer)
     Rewrites the question to improve vector search if grading failed.
@@ -147,12 +126,14 @@ def transform_query(state):
 
 
 async def generate(state: GraphState, config: RunnableConfig):
+    """
+    Node 4: GENERATE
+    Produces the final answer using retrieved context.
+    """
     print("---GENERATE NODE---")
     question = state["question"]
     documents = state["documents"]
 
-    # --- CHANGE 1: Format Context with Filenames ---
-    # We now format it as: "[Source: acme_policy.pdf] The content..."
     context_text = "\n\n".join(
         [
             f"[Source: {doc.metadata.get('source_file', 'Unknown')}]\n{doc.page_content}"
@@ -160,7 +141,6 @@ async def generate(state: GraphState, config: RunnableConfig):
         ]
     )
 
-    # Final Answer Prompt (Slightly tweaked to encourage citing sources)
     prompt = ChatPromptTemplate.from_template(
         "You are a strict Compliance Auditor AI. "
         "Answer the user's question using ONLY the context provided below. "
@@ -182,7 +162,7 @@ async def generate(state: GraphState, config: RunnableConfig):
 
 
 # =============================================================================
-# 4. BUILD THE GRAPH LOGIC
+# 3. BUILD THE GRAPH LOGIC
 # =============================================================================
 
 workflow = StateGraph(GraphState)
@@ -196,32 +176,20 @@ workflow.add_node("transform_query", transform_query)
 # Define Entry Point
 workflow.set_entry_point("retrieve")
 
-# Add Normal Edges
+# Add Edges
 workflow.add_edge("retrieve", "grade_documents")
-workflow.add_edge("transform_query", "retrieve")  # The loop back!
+workflow.add_edge("transform_query", "retrieve")
 
-
-# Add Conditional Edge Logic
-def decide_to_generate(state):
-    print("---DECISION LOGIC---")
+def decide_to_generate(state: GraphState):
     grade = state.get("grade")
-    retries = state.get("retry_count", 0)  # Get current count (default 0)
+    retries = state.get("retry_count", 0)
 
     if grade == "yes":
-        print("---DECISION: Documents are Good -> Generate---")
         return "generate"
-
-    # NEW: Check if we hit the limit
     elif retries >= 3:
-        print("---DECISION: Max Retries Hit -> Give Up (Generate anyway)---")
-        # We send it to generate, but the generator will see irrelevant docs
-        # and its System Prompt will force it to say "I cannot find this".
         return "generate"
-
     else:
-        print(f"---DECISION: Retry #{retries + 1} -> Rewrite Query---")
         return "transform_query"
-
 
 workflow.add_conditional_edges(
     "grade_documents",
@@ -235,51 +203,15 @@ workflow.add_edge("generate", END)
 app = workflow.compile()
 
 # =============================================================================
-# 5. PUBLIC INTERFACE (Used by Main.py)
+# 4. PUBLIC INTERFACE (Used by API)
 # =============================================================================
-
-
-def route_query(query: str) -> Literal["chat", "search"]:
-    """
-    Fast Semantic Router to skip the heavy graph for greetings.
-    """
-    router_prompt = (
-        "You are a router. Classify the user's input. "
-        "Return 'chat' for: greetings, pleasantries, small talk, OR questions about your identity (e.g., 'who are you?', 'what can you do?'). "
-        "Return 'search' for: questions seeking information, rules, definitions, or compliance data from the NIST framework. "
-        "Return ONLY the word 'chat' or 'search'."
-    )
-    prompt = ChatPromptTemplate.from_messages(
-        [("system", router_prompt), ("human", "{input}")]
-    )
-    chain = prompt | llm | StrOutputParser()
-    return chain.invoke({"input": query}).strip().lower()
-
-
-def run_chat_logic(query: str):
-    return {
-        "answer": "I am AuditAI, an autonomous NIST Compliance Engine. I can verify rules, definitions, and functions from the CSF 2.0 framework.",
-        "context": [],
-    }
-
 
 def process_query(user_query: str):
     """
-    Main function called by FastAPI.
-    1. Checks Router.
-    2. If 'search', runs the Agent Graph.
+    Helper function for non-streaming execution (e.g., for evals).
+    Note: API uses astream_events directly for latency optimization.
     """
-    # 1. Fast Route Check
-    intent = route_query(user_query)
-    print(f"---ROUTER: {intent.upper()}---")
-
-    if intent == "chat":
-        return run_chat_logic(user_query)
-
-    # 2. Run the Agent Graph
     inputs = {"question": user_query}
-
-    # Invoke the graph
     try:
         final_state = asyncio.run(app.ainvoke(inputs))
         return {
@@ -287,9 +219,5 @@ def process_query(user_query: str):
             "context": final_state["documents"],
         }
     except Exception as e:
-        # Fallback if graph fails
         print(f"Graph Error: {e}")
-        return {
-            "answer": "I encountered an error while processing your request internally.",
-            "context": [],
-        }
+        return {"answer": "Error processing request.", "context": []}

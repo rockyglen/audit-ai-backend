@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Import the graph AND the router logic
-from audit_ai.core.rag_engine import app as audit_graph, route_query, run_chat_logic
+from audit_ai.engine import app as audit_graph, route_query, run_chat_logic
 
 app = FastAPI(
     title="AuditAI Agent API",

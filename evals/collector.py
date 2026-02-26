@@ -1,9 +1,17 @@
+import sys
 import os
+
+# --- PATH HACK (Industrial Standard for standalone scripts) ---
+# Adds the 'src' directory to the path so we can import 'audit_ai'
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
+sys.path.append(os.path.join(PROJECT_ROOT, "src"))
+
 import csv
 import json
 import time
 import pandas as pd
-from audit_ai.core.rag_engine import process_query
+from audit_ai.engine import process_query
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -11,6 +19,9 @@ load_dotenv()
 
 def load_test_csv(file_path):
     rows = []
+    if not os.path.exists(file_path):
+        print(f"❌ Error: '{file_path}' not found.")
+        return []
     with open(file_path, "r", encoding="utf-8") as f:
         f.readline()  # skip header
         reader = csv.reader(f)
@@ -22,8 +33,14 @@ def load_test_csv(file_path):
     return rows
 
 
+# --- PATH LOGIC (Flattened) ---
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+TEST_FILE = os.path.join(CURRENT_DIR, "test.csv")
+RESULTS_FILE = os.path.join(CURRENT_DIR, "rag_results.json")
+
+
 def collect_answers():
-    test_questions = load_test_csv("test.csv")
+    test_questions = load_test_csv(TEST_FILE)
     collected_data = []
 
     print(f"🚀 Starting collection for {len(test_questions)} questions...")
@@ -49,7 +66,7 @@ def collect_answers():
         time.sleep(1)
 
     # Save to a local file
-    with open("rag_results.json", "w") as f:
+    with open(RESULTS_FILE, "w") as f:
         json.dump(collected_data, f, indent=4)
 
     print("✅ Collection complete! Data saved to 'rag_results.json'")

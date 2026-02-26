@@ -2,12 +2,14 @@ import os
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings  # <--- Changed
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
 
 load_dotenv()
 
-PDF_FILE_NAME = "data/nist_framework.pdf"
+# --- PATH LOGIC ---
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PDF_FILE_NAME = os.path.join(BASE_DIR, "data", "nist_framework.pdf")
 COLLECTION_NAME = "compliance_audit"
 
 
