@@ -206,11 +206,49 @@ app = workflow.compile()
 # 4. PUBLIC INTERFACE (Used by API)
 # =============================================================================
 
+def route_query(user_query: str) -> Literal["chat", "search"]:
+    """
+    Semantic Router: Decides if the query is a basic greeting/identity check 
+    or a complex compliance search requiring the graph.
+    """
+    prompt = ChatPromptTemplate.from_template(
+        "You are a router. Classify the user input as 'chat' (greetings, identity, basic help) "
+        "or 'search' (specific questions about NIST, cybersecurity framework, policies, or compliance). \n"
+        "Input: {query} \n"
+        "Return ONLY one word: 'chat' or 'search'."
+    )
+    
+    chain = prompt | llm | StrOutputParser()
+    intent = chain.invoke({"query": user_query}).strip().lower()
+    
+    if "chat" in intent:
+        return "chat"
+    return "search"
+
+
+def run_chat_logic(user_query: str):
+    """
+    Handles simple conversational queries without the full graph.
+    """
+    prompt = ChatPromptTemplate.from_template(
+        "You are AuditAI, an autonomous compliance auditor built by Glen Louis. "
+        "Answer this basic conversational query naturally: {query}"
+    )
+    
+    chain = prompt | llm | StrOutputParser()
+    answer = chain.invoke({"query": user_query})
+    return {"answer": answer}
+
+
 def process_query(user_query: str):
     """
     Helper function for non-streaming execution (e.g., for evals).
-    Note: API uses astream_events directly for latency optimization.
     """
+    intent = route_query(user_query)
+    
+    if intent == "chat":
+        return run_chat_logic(user_query)
+        
     inputs = {"question": user_query}
     try:
         final_state = asyncio.run(app.ainvoke(inputs))

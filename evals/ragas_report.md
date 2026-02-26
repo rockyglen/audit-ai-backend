@@ -1,6 +1,6 @@
 # 📊 AuditAI: RAG Evaluation Report
 
-Generated on: 2026-02-26 01:16:04
+Generated on: 2026-02-26 13:36:19
 
 ## 🏛️ Executive Summary
 Below are the average scores across all evaluated metrics.
@@ -8,7 +8,7 @@ Below are the average scores across all evaluated metrics.
 | Metric | Score | Status |
 | :--- | :--- | :--- |
 | **Faithfulness** | `1.0000` | ✅ Passing |
-| **Answer Relevancy** | `0.7570` | ✅ Passing |
+| **Answer Relevancy** | `0.7644` | ✅ Passing |
 | **Context Precision** | `0.7838` | ✅ Passing |
 | **Context Recall** | `0.9000` | ✅ Passing |
 
@@ -80,7 +80,7 @@ The provided context further details the function as follows:
 
 **Scores:**
 - Faithfulness: `1.0000`
-- Answer Relevancy: `0.7489`
+- Answer Relevancy: `0.7485`
 - Context Precision: `0.8667`
 - Context Recall: `1.0000`
 
@@ -115,7 +115,7 @@ The document further notes that actions supporting the Respond function should b
 
 **Scores:**
 - Faithfulness: `1.0000`
-- Answer Relevancy: `0.7492`
+- Answer Relevancy: `0.7468`
 - Context Precision: `0.8095`
 - Context Recall: `1.0000`
 
@@ -153,7 +153,7 @@ There are no conflicts regarding the RECOVER function across the provided docume
 
 **Scores:**
 - Faithfulness: `N/A`
-- Answer Relevancy: `0.8056`
+- Answer Relevancy: `0.8462`
 - Context Precision: `0.8875`
 - Context Recall: `1.0000`
 
@@ -174,7 +174,7 @@ Additionally, **NIST CSWP 29 The NIST Cybersecurity Framework (CSF) 2.0** define
 
 **Scores:**
 - Faithfulness: `1.0000`
-- Answer Relevancy: `0.6997`
+- Answer Relevancy: `0.7050`
 - Context Precision: `0.7611`
 - Context Recall: `1.0000`
 
@@ -204,7 +204,7 @@ According to the document, progression to higher Tiers is encouraged when risks 
 
 **Scores:**
 - Faithfulness: `1.0000`
-- Answer Relevancy: `0.7461`
+- Answer Relevancy: `0.7459`
 - Context Precision: `0.5889`
 - Context Recall: `1.0000`
 
@@ -250,7 +250,7 @@ The outcomes covered by this Function include:
 
 **Scores:**
 - Faithfulness: `1.0000`
-- Answer Relevancy: `0.7142`
+- Answer Relevancy: `0.7343`
 - Context Precision: `0.7222`
 - Context Recall: `0.0000`
 
@@ -271,7 +271,7 @@ The outcomes covered by this Function include:
 
 **Scores:**
 - Faithfulness: `1.0000`
-- Answer Relevancy: `0.8131`
+- Answer Relevancy: `0.8235`
 - Context Precision: `0.7857`
 - Context Recall: `1.0000`
 

@@ -44,40 +44,50 @@ AuditAI implements a "Strict Evidence" policy:
 | Component | Technology | Rationale |
 | :--- | :--- | :--- |
 | **Orchestration** | LangGraph | Complex state management and cyclic loops (Self-Correction). |
-| **LLM** | Llama-3.3 70B (Groq) | Ultra-low latency inference with high reasoning capabilities. |
-| **Embeddings** | Google Gemini `text-embedding-004` | State-of-the-art semantic density for technical compliance text. |
+| **LLM** | Gemini 3 Flash Preview | State-of-the-art reasoning with native long-context support and low latency. |
+| **Embeddings** | Gemini `embedding-001` | High semantic density for technical compliance text. |
 | **Vector DB** | Qdrant Cloud | High-performance vector search with metadata filtering support. |
 | **Performance** | FastAPI (Async) | Supports Server-Sent Events (SSE) for real-time token streaming. |
 
 ---
 
-## 📊 Evaluation Framework (RAGAS)
+## 📊 Evaluation Results (RAGAS)
 
-To ensure production stability, the system is evaluated using the **RAGAS** (RAG Assessment Series) framework.
+| Metric | Score | Status |
+| :--- | :--- | :--- |
+| **Faithfulness** | `1.0000` | ✅ |
+| **Answer Relevancy** | `0.7574` | ✅ |
+| **Context Precision** | `0.7838` | ✅ |
+| **Context Recall** | `0.9000` | ✅ |
 
-### Key Metrics Tracked:
-1.  **Faithfulness**: Measures if the answer is derived strictly from the retrieved context (Zero Hallucination).
+> [!TIP]
+> **View the [Full Report](evals/ragas_report.md)** for detailed analysis.
+
+### Key Metrics Defined:
+1.  **Faithfulness**: Measures if the answer is derived strictly from the retrieved context.
 2.  **Answer Relevancy**: Assesses how well the response addresses the user's intent.
 3.  **Context Precision**: Evaluates the signal-to-noise ratio in retrieved chunks.
-4.  **Context Recall**: Checks if all necessary information to answer the question was actually retrieved.
-
-### Engineering Challenge: Custom LLM Wrappers
-The evaluation suite includes a **Custom Groq Wrapper** to handle API limitations (like the `n=1` constraint), allowing RAGAS to run "LLM-as-a-judge" simulations reliably on top of Groq's high-speed infrastructure.
+4.  **Context Recall**: Checks if all necessary information was actually retrieved.
 
 ---
 
-## 📂 Modular Project Structure
+## 📂 Simplified Project Structure
+
+We maintain a flat, manageable directory structure for faster development and easier maintenance:
 
 ```text
 audit-ai-backend/
 ├── src/audit_ai/
-│   ├── api/            # FastAPI entry points & SSE streaming logic
-│   ├── core/           # LangGraph state machine & RAG nodes
-│   └── data/           # PDF processing & vector ingestion pipeline
-├── scripts/            # Data collection & utility wrappers
-├── evals/              # RAGAS evaluation suite & test datasets
+    ├── config.py       # Centralized API & model configuration
+    ├── engine.py       # Core LangGraph logic, state & nodes
+    ├── ingestion.py    # PDF processing & vector ingestion pipeline
+    └── main.py         # FastAPI application & entry point
+├── evals/
+    ├── collector.py    # Dataset collection from the RAG engine
+    ├── evaluator.py    # RAGAS evaluation runner & report generator
+    └── test.csv        # NIST compliance test dataset (Ground Truth)
 ├── data/               # Raw NIST PDF documents
-└── Dockerfile          # Multi-stage production build
+└── Dockerfile          # Multi-stage production build (Python 3.12)
 ```
 
 ---
@@ -97,18 +107,16 @@ audit-ai-backend/
 ### Execution
 *   **Run Backend**: 
     ```bash
-    export PYTHONPATH=$PYTHONPATH:$(pwd)/src
-    uv run python src/audit_ai/api/main.py
+    uv run python src/audit_ai/main.py
     ```
-*   **Run Evaluator**:
-    ```bash
-    export PYTHONPATH=$PYTHONPATH:$(pwd)/src
-    uv run python evals/ragas_eval.py
-    ```
+*   **Generate Evaluation Report**:
+    1. Collect results: `uv run python evals/collector.py`
+    2. Run RAGAS: `uv run python evals/evaluator.py`
 
 ---
 
 ## 🛠️ Deployment
 
-- **Containerization**: Optimized with multi-stage Docker builds.
+- **Containerization**: Optimized with multi-stage Docker builds using Python 3.12.
 - **CI/CD**: Configured for Render/Vercel with automatic health checks.
+- **Entry point**: `uvicorn audit_ai.main:app`
