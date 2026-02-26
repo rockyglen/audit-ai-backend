@@ -231,7 +231,7 @@ def run_chat_logic(user_query: str):
     Handles simple conversational queries without the full graph.
     """
     prompt = ChatPromptTemplate.from_template(
-        "You are AuditAI, an autonomous compliance auditor built by Glen Louis. "
+        "You are AuditAI, an autonomous compliance auditor."
         "Answer this basic conversational query naturally: {query}"
     )
     
