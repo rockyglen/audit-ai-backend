@@ -18,8 +18,14 @@ from ragas.metrics import (
     ContextPrecision,
     ContextRecall,
 )
+from audit_ai.config import EVAL_JUDGE_MODEL, GOOGLE_API_KEY, EMBEDDING_MODEL
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from dotenv import load_dotenv
+import numpy as np
+import warnings
+
+# Suppress deprecation warnings from RAGAS/Google
+warnings.filterwarnings("ignore")
 
 # Load environment variables
 load_dotenv()
@@ -31,7 +37,7 @@ RESULTS_FILE = os.path.join(CURRENT_DIR, "rag_results.json")
 REPORT_FILE = os.path.join(CURRENT_DIR, "ragas_report.md")
 
 
-def generate_markdown_report(df, summary_scores):
+def generate_markdown_report(df, averages):
     """
     Creates a professional-grade Markdown report of the evaluation.
     """
@@ -45,10 +51,16 @@ def generate_markdown_report(df, summary_scores):
         
         f.write("| Metric | Score | Status |\n")
         f.write("| :--- | :--- | :--- |\n")
-        for metric, score in summary_scores.items():
+        
+        for metric, score in averages.items():
+            if np.isnan(score): 
+                score = 0.0
+                
             status = "✅ Passing" if score >= 0.7 else "⚠️ Needs Review"
             if score < 0.3: status = "❌ Failing"
-            f.write(f"| **{metric.replace('_', ' ').title()}** | `{score:.4f}` | {status} |\n")
+            
+            metric_name = metric.replace('_', ' ').title()
+            f.write(f"| **{metric_name}** | `{score:.4f}` | {status} |\n")
         
         f.write("\n---\n\n")
         
@@ -62,14 +74,14 @@ def generate_markdown_report(df, summary_scores):
             f.write(f"**Ground Truth:** {row['ground_truth']}\n\n")
             
             f.write("**Scores:**\n")
-            f.write(f"- Faithfulness: `{row['faithfulness']:.4f}`\n")
-            f.write(f"- Answer Relevancy: `{row['answer_relevancy']:.4f}`\n")
-            f.write(f"- Context Precision: `{row['context_precision']:.4f}`\n")
-            f.write(f"- Context Recall: `{row['context_recall']:.4f}`\n\n")
-            f.write("---\n\n")
+            for m in averages.keys():
+                if m in row:
+                    val = row[m]
+                    val_str = f"`{val:.4f}`" if not (isinstance(val, float) and np.isnan(val)) else "`N/A`"
+                    f.write(f"- {m.replace('_', ' ').title()}: {val_str}\n")
+            f.write("\n---\n\n")
 
-    report_path = REPORT_FILE
-    print(f"✅ Complete report generated: '{report_path}'")
+    print(f"✅ Complete report generated: '{REPORT_FILE}'")
 
 
 def run_ragas_eval():
@@ -85,40 +97,31 @@ def run_ragas_eval():
     print(f"📂 Loaded {len(raw_data)} records from {RESULTS_FILE}")
 
     # ⚠️ LIMIT DATASET TO SAVE TOKENS (Rate Limit Protection)
-    # Increased to 10 for a more complete report
     raw_data = raw_data[:10]
     print(f"⚠️  Running on {len(raw_data)} records...")
 
     # 2. Prepare Dataset for RAGAS
-    ragas_data = {
-        "question": [],
-        "answer": [],
-        "contexts": [],
-        "ground_truth": [],
-    }
+    dataset = Dataset.from_dict({
+        "question": [e["question"] for e in raw_data],
+        "answer": [e["answer"] for e in raw_data],
+        "contexts": [e["contexts"] for e in raw_data],
+        "ground_truth": [e["ground_truth"] for e in raw_data],
+    })
 
-    for entry in raw_data:
-        ragas_data["question"].append(entry["question"])
-        ragas_data["answer"].append(entry["answer"])
-        ragas_data["contexts"].append(entry["contexts"])
-        ragas_data["ground_truth"].append(entry["ground_truth"])
-
-    dataset = Dataset.from_dict(ragas_data)
-
-    # 3. Configure Judge Models (Gemini 2.5 Flash Lite)
+    # 3. Configure Judge Models from config
     judge_llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-lite",
+        model=EVAL_JUDGE_MODEL,
         temperature=0,
-        google_api_key=os.getenv("GOOGLE_API_KEY"),
+        google_api_key=GOOGLE_API_KEY,
     )
 
     embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/gemini-embedding-001",
-        google_api_key=os.getenv("GOOGLE_API_KEY"),
+        model=EMBEDDING_MODEL,
+        google_api_key=GOOGLE_API_KEY,
     )
 
     # 4. Run Evaluation
-    print("🚀 Starting RAGAS Evaluation...")
+    print(f"🚀 Starting RAGAS Evaluation using {EVAL_JUDGE_MODEL}...")
     results = evaluate(
         dataset=dataset,
         metrics=[
@@ -134,20 +137,26 @@ def run_ragas_eval():
     )
 
     # 5. Generate Reports
-    print("\n--- 📊 RAGAS SCORES ---")
-    summary = {
-        "faithfulness": results["faithfulness"],
-        "answer_relevancy": results["answer_relevancy"],
-        "context_precision": results["context_precision"],
-        "context_recall": results["context_recall"],
-    }
-    print(summary)
-
     df = results.to_pandas()
+    df_input = dataset.to_pandas()
+    
+    # CRITICAL: Re-attach input columns if RAGAS stripped them (Fixes KeyError: 'question')
+    for col in ["question", "answer", "ground_truth"]:
+        if col not in df.columns and col in df_input.columns:
+            df[col] = df_input[col]
+    
+    # Calculate absolute averages from the dataframe (safest method)
+    numeric_df = df.select_dtypes(include=[np.number])
+    averages = numeric_df.mean().to_dict()
+
+    print("\n--- 📊 FINAL AVERAGES ---")
+    for k, v in averages.items():
+        print(f"{k}: {v:.4f}")
+
     df.to_csv("ragas_results.csv", index=False)
     
     # NEW: Generate the Markdown Report
-    generate_markdown_report(df, summary)
+    generate_markdown_report(df, averages)
 
 
 if __name__ == "__main__":
