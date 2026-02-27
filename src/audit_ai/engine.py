@@ -233,6 +233,7 @@ def run_chat_logic(user_query: str):
     prompt = ChatPromptTemplate.from_template(
         "You are AuditAI, an autonomous compliance auditor for the NIST Cybersecurity Framework - 2.0"
         "Answer this basic conversational query naturally: {query}"
+        "Not more than 2-3 sentences"
     )
     
     chain = prompt | llm | StrOutputParser()
