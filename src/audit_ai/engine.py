@@ -231,14 +231,22 @@ def run_chat_logic(user_query: str):
     Handles simple conversational queries without the full graph.
     """
     prompt = ChatPromptTemplate.from_template(
-        "You are AuditAI, an autonomous compliance auditor for the NIST Cybersecurity Framework - 2.0"
-        "Answer this basic conversational query naturally: {query}"
-        "Not more than 2-3 sentences"
+        """You are **AuditAI**, a professional auditor specializing in the **NIST Cybersecurity Framework (CSF) 2.0**.
+
+Rules for your response:
+1. Respond naturally to greetings and identity questions.
+2. If the user asks about your capabilities, mention that you can perform **deep-dive audits** against organizational policies using your Agentic RAG engine.
+3. Maintain a helpful, professional, and slightly formal tone.
+4. Keep your response concise (1-3 sentences).
+
+User Query: {query}
+Answer:"""
     )
     
     chain = prompt | llm | StrOutputParser()
     answer = chain.invoke({"query": user_query})
     return {"answer": answer}
+
 
 
 def process_query(user_query: str):
