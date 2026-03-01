@@ -114,7 +114,8 @@ def transform_query(state: GraphState):
     prompt = ChatPromptTemplate.from_template(
         "You are generating a specialized vector search query from a user question. \n"
         "The previous search for the question '{question}' failed to yield relevant results. \n"
-        "Please re-phrase the question to focus on key technical terms for the NIST Cybersecurity Framework. \n"
+        "Please re-phrase the question to focus on key searchable terms relevant to the original intent. \n"
+        "If the question appears to be about NIST or cybersecurity policies, include core framework keywords. \n"
         "Return ONLY the new query text."
     )
 
@@ -212,9 +213,11 @@ def route_query(user_query: str) -> Literal["chat", "search"]:
     or a complex compliance search requiring the graph.
     """
     prompt = ChatPromptTemplate.from_template(
-        "You are a router. Classify the user input as 'chat' (greetings, identity, basic help) "
-        "or 'search' (specific questions about NIST, cybersecurity framework, policies, or compliance). \n"
+        "You are a router. Classify user input into one of two categories: \n"
+        "1. 'chat': Greetings, identity checks, unrelated/nonsense questions (dogs, painting, sports), or general help. \n"
+        "2. 'search': Specific, serious questions about NIST CSF 2.0, organizational policies, or compliance audits. \n\n"
         "Input: {query} \n"
+        "If you are even slightly unsure if it is a compliance query, return 'chat'. \n"
         "Return ONLY one word: 'chat' or 'search'."
     )
     

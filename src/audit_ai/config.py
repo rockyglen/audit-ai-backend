@@ -11,7 +11,7 @@ QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 
 # --- Database & Model Configs ---
 EMBEDDING_MODEL = "models/gemini-embedding-001"
-LLM_MODEL = "gemini-2.5-flash-lite"
+LLM_MODEL = "gemini-2.0-flash-lite"
 EVAL_JUDGE_MODEL = "gemini-2.5-flash-lite"
 COLLECTION_NAME = "compliance_audit"
 
